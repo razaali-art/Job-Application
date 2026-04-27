@@ -1,4 +1,4 @@
-"use client";
+ "use client";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -31,6 +31,28 @@ export default function SignUp() {
 
     setError("");
     setLoading(true);
+
+    // Name validation
+    if (name.trim().length < 3) {
+      setError("Name must be at least 3 characters long");
+      setLoading(false);
+      return;
+    }
+
+    if (!/^[a-zA-Z\s]+$/.test(name.trim())) {
+      setError("Name should only contain letters and spaces");
+      setLoading(false);
+      return;
+    }
+
+    // Email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+    if (!emailRegex.test(email.trim())) {
+      setError("Please enter a valid email address");
+      setLoading(false);
+      return;
+    }
 
     try {
       const result = await signUp.email({
@@ -74,6 +96,7 @@ export default function SignUp() {
                 {error}
               </div>
             )}
+
             <div className="space-y-2">
               <Label htmlFor="name" className="text-gray-700">
                 Name
@@ -88,6 +111,7 @@ export default function SignUp() {
                 className="border-gray-300 focus:border-primary focus:ring-primary"
               />
             </div>
+
             <div className="space-y-2">
               <Label htmlFor="email" className="text-gray-700">
                 Email
@@ -102,6 +126,7 @@ export default function SignUp() {
                 className="border-gray-300 focus:border-primary focus:ring-primary"
               />
             </div>
+
             <div className="space-y-2">
               <Label htmlFor="password" className="text-gray-700">
                 Password
@@ -117,6 +142,7 @@ export default function SignUp() {
               />
             </div>
           </CardContent>
+
           <CardFooter className="flex flex-col space-y-4">
             <Button
               type="submit"
@@ -125,6 +151,7 @@ export default function SignUp() {
             >
               {loading ? "Creating account..." : "Sign Up"}
             </Button>
+
             <p className="text-center text-sm text-gray-600">
               Already have an account?{" "}
               <Link
