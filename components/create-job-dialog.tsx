@@ -39,9 +39,11 @@ export default function CreateJobApplicationDialog({
 }: CreateJobApplicationDialogProps) {
   const [open, setOpen] = useState<boolean>(false);
   const [formData, setFormData] = useState(INITIAL_FORM_DATA);
+  const [error, setError] = useState(""); // ✅ added
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    setError(""); // ✅ reset previous error
 
     try {
       const result = await createJobApplication({
@@ -54,39 +56,44 @@ export default function CreateJobApplicationDialog({
           .filter((tag) => tag.length > 0),
       });
 
-      if (!result.error) {
-        setFormData(INITIAL_FORM_DATA);
-        setOpen(false);
-      } else {
-        console.error("Failed to create job: ", result.error);
+      if (result.error) {
+        setError(result.error); // ✅ show error on UI
+        return;
       }
+
+      // success
+      setFormData(INITIAL_FORM_DATA);
+      setOpen(false);
     } catch (err) {
       console.error(err);
+      setError("Something went wrong. Please try again."); // ✅ fallback error
     }
   }
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-  <Button variant="outline" className="w-full mb-...">
-    Add Job
-  </Button>
-</DialogTrigger>
-      {/* <DialogTrigger>
-        <Button
-          variant="outline"
-          className="w-full mb-4 justify-start text-muted-foreground border-dashed border-2 hover:border-solid hover:bg-muted/50"
-        >
-          <Plus className="mr-2 h-4 w-4" />
+        <Button variant="outline" className="w-full mb-...">
           Add Job
         </Button>
-      </DialogTrigger> */}
+      </DialogTrigger>
+
       <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle>Add Job Application</DialogTitle>
-          <DialogDescription>Track a new job application</DialogDescription>
+          <DialogDescription>
+            Track a new job application
+          </DialogDescription>
         </DialogHeader>
+
         <form className="space-y-4" onSubmit={handleSubmit}>
+          {/* ✅ error display */}
+          {error && (
+            <p className="text-sm text-red-500 font-medium">
+              {error}
+            </p>
+          )}
+
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
@@ -100,6 +107,7 @@ export default function CreateJobApplicationDialog({
                   }
                 />
               </div>
+
               <div className="space-y-2">
                 <Label htmlFor="position">Position *</Label>
                 <Input
@@ -112,6 +120,7 @@ export default function CreateJobApplicationDialog({
                 />
               </div>
             </div>
+
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="location">Location</Label>
@@ -123,11 +132,12 @@ export default function CreateJobApplicationDialog({
                   }
                 />
               </div>
+
               <div className="space-y-2">
                 <Label htmlFor="salary">Salary</Label>
                 <Input
                   id="salary"
-                  placeholder="e.g., $100k - $150k"
+                  placeholder="e.g.₹50,000 per month "
                   value={formData.salary}
                   onChange={(e) =>
                     setFormData({ ...formData, salary: e.target.value })
@@ -135,6 +145,7 @@ export default function CreateJobApplicationDialog({
                 />
               </div>
             </div>
+
             <div className="space-y-2">
               <Label htmlFor="jobUrl">Job URL</Label>
               <Input
@@ -147,6 +158,7 @@ export default function CreateJobApplicationDialog({
                 }
               />
             </div>
+
             <div className="space-y-2">
               <Label htmlFor="tags">Tags (comma-separated)</Label>
               <Input
@@ -158,6 +170,7 @@ export default function CreateJobApplicationDialog({
                 }
               />
             </div>
+
             <div className="space-y-2">
               <Label htmlFor="description">Description</Label>
               <Textarea
@@ -166,10 +179,14 @@ export default function CreateJobApplicationDialog({
                 placeholder="Brief description of the role..."
                 value={formData.description}
                 onChange={(e) =>
-                  setFormData({ ...formData, description: e.target.value })
+                  setFormData({
+                    ...formData,
+                    description: e.target.value,
+                  })
                 }
               />
             </div>
+
             <div className="space-y-2">
               <Label htmlFor="notes">Notes</Label>
               <Textarea
@@ -191,6 +208,7 @@ export default function CreateJobApplicationDialog({
             >
               Cancel
             </Button>
+
             <Button type="submit">Add Application</Button>
           </DialogFooter>
         </form>

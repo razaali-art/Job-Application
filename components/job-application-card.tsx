@@ -2,7 +2,7 @@
 
 import { JobApplication, Column } from "@/lib/models/models.types";
 import { Card, CardContent } from "./ui/card";
-import { Edit2, ExternalLink, MoreVertical, Plus, Trash2 } from "lucide-react";
+import { Edit2, ExternalLink, MoreVertical, Trash2 } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -26,6 +26,7 @@ import { Label } from "./ui/label";
 import { Input } from "./ui/input";
 import { Textarea } from "./ui/textarea";
 import React, { useState } from "react";
+
 interface JobApplicationCardProps {
   job: JobApplication;
   columns: Column[];
@@ -38,6 +39,8 @@ export default function JobApplicationCard({
   dragHandleProps,
 }: JobApplicationCardProps) {
   const [isEditing, setIsEditing] = useState(false);
+  const [error, setError] = useState("");
+
   const [formData, setFormData] = useState({
     company: job.company,
     position: job.position,
@@ -52,20 +55,88 @@ export default function JobApplicationCard({
 
   async function handleUpdate(e: React.FormEvent) {
     e.preventDefault();
-    try {
-      const result = await updateJobApplication(job._id, {
-        ...formData,
-        tags: formData.tags
+    setError("");
+
+    const company = formData.company.trim();
+    const position = formData.position.trim();
+    const location = formData.location.trim();
+    const salary = formData.salary.trim();
+    const jobUrl = formData.jobUrl.trim();
+    const description = formData.description.trim();
+    const notes = formData.notes.trim();
+
+    // Company validation
+    if (!company || company.length < 2) {
+      setError("Company name must be at least 2 characters.");
+      return;
+    }
+
+    // Position validation
+    if (!position || position.length < 2) {
+      setError("Position must be at least 2 characters.");
+      return;
+    }
+
+    // Salary validation
+    if (salary && (isNaN(Number(salary)) || Number(salary) <= 0)) {
+      setError("Salary must be a valid number greater than 0.");
+      return;
+    }
+
+    // URL validation
+    if (jobUrl) {
+      const urlPattern = /^(https?:\/\/)/i;
+
+      if (!urlPattern.test(jobUrl)) {
+        setError("Job URL must start with http:// or https://");
+        return;
+      }
+    }
+
+    // Description validation
+    if (description.length > 500) {
+      setError("Description cannot exceed 500 characters.");
+      return;
+    }
+
+    // Notes validation
+    if (notes.length > 1000) {
+      setError("Notes cannot exceed 1000 characters.");
+      return;
+    }
+
+    // Tags cleanup + duplicate removal
+    const cleanedTags = [
+      ...new Set(
+        formData.tags
           .split(",")
           .map((tag) => tag.trim())
-          .filter((tag) => tag.length > 0),
+          .filter((tag) => tag.length > 0)
+      ),
+    ];
+
+    try {
+      const result = await updateJobApplication(job._id, {
+        company,
+        position,
+        location,
+        salary,
+        jobUrl,
+        description,
+        notes,
+        columnId: formData.columnId,
+        tags: cleanedTags,
       });
 
-      if (!result.error) {
-        setIsEditing(false);
+      if (result.error) {
+        setError(result.error);
+        return;
       }
+
+      setIsEditing(false);
     } catch (err) {
-      console.error("Failed to move job application: ", err);
+      console.error("Failed to update job application:", err);
+      setError("Failed to update job application.");
     }
   }
 
@@ -74,10 +145,12 @@ export default function JobApplicationCard({
       const result = await deleteJobApplication(job._id);
 
       if (result.error) {
+        alert(result.error);
         console.error("Failed to delete job application:", result.error);
       }
     } catch (err) {
-      console.error("Failed to move job application: ", err);
+      console.error("Failed to delete job application:", err);
+      alert("Failed to delete job application.");
     }
   }
 
@@ -86,10 +159,16 @@ export default function JobApplicationCard({
       const result = await updateJobApplication(job._id, {
         columnId: newColumnId,
       });
+
+      if (result.error) {
+        alert(result.error);
+      }
     } catch (err) {
-      console.error("Failed to move job application: ", err);
+      console.error("Failed to move job application:", err);
+      alert("Failed to move job application.");
     }
   }
+
   return (
     <>
       <Card
@@ -100,14 +179,17 @@ export default function JobApplicationCard({
           <div className="flex items-start justify-between gap-2">
             <div className="flex-1 min-w-0">
               <h3 className="font-semibold text-sm mb-1">{job.position}</h3>
+
               <p className="text-xs text-muted-foreground mb-2">
                 {job.company}
               </p>
+
               {job.description && (
                 <p className="text-xs text-muted-foreground mb-2 line-clamp-2">
                   {job.description}
                 </p>
               )}
+
               {job.tags && job.tags.length > 0 && (
                 <div className="flex flex-wrap gap-1 mb-2">
                   {job.tags.map((tag, index) => (
@@ -120,6 +202,7 @@ export default function JobApplicationCard({
                   ))}
                 </div>
               )}
+
               {job.jobUrl && (
                 <a
                   href={job.jobUrl}
@@ -131,6 +214,7 @@ export default function JobApplicationCard({
                 </a>
               )}
             </div>
+
             <div className="flex items-start gap-1">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -138,11 +222,13 @@ export default function JobApplicationCard({
                     <MoreVertical className="h-4 w-4" />
                   </Button>
                 </DropdownMenuTrigger>
+
                 <DropdownMenuContent align="end">
                   <DropdownMenuItem onClick={() => setIsEditing(true)}>
                     <Edit2 className="mr-2 h-4 w-4" />
                     Edit
                   </DropdownMenuItem>
+
                   {columns.length > 1 && (
                     <>
                       {columns
@@ -157,6 +243,7 @@ export default function JobApplicationCard({
                         ))}
                     </>
                   )}
+
                   <DropdownMenuItem
                     className="text-destructive"
                     onClick={() => handleDelete()}
@@ -174,10 +261,19 @@ export default function JobApplicationCard({
       <Dialog open={isEditing} onOpenChange={setIsEditing}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Add Job Application</DialogTitle>
-            <DialogDescription>Track a new job application</DialogDescription>
+            <DialogTitle>Edit Job Application</DialogTitle>
+            <DialogDescription>
+              Track a new job application
+            </DialogDescription>
           </DialogHeader>
+
           <form className="space-y-4" onSubmit={handleUpdate}>
+            {error && (
+              <p className="text-sm text-red-500 font-medium">
+                {error}
+              </p>
+            )}
+
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
@@ -187,10 +283,14 @@ export default function JobApplicationCard({
                     required
                     value={formData.company}
                     onChange={(e) =>
-                      setFormData({ ...formData, company: e.target.value })
+                      setFormData({
+                        ...formData,
+                        company: e.target.value,
+                      })
                     }
                   />
                 </div>
+
                 <div className="space-y-2">
                   <Label htmlFor="position">Position *</Label>
                   <Input
@@ -198,11 +298,15 @@ export default function JobApplicationCard({
                     required
                     value={formData.position}
                     onChange={(e) =>
-                      setFormData({ ...formData, position: e.target.value })
+                      setFormData({
+                        ...formData,
+                        position: e.target.value,
+                      })
                     }
                   />
                 </div>
               </div>
+
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="location">Location</Label>
@@ -210,22 +314,31 @@ export default function JobApplicationCard({
                     id="location"
                     value={formData.location}
                     onChange={(e) =>
-                      setFormData({ ...formData, location: e.target.value })
+                      setFormData({
+                        ...formData,
+                        location: e.target.value,
+                      })
                     }
                   />
                 </div>
+
                 <div className="space-y-2">
                   <Label htmlFor="salary">Salary</Label>
                   <Input
                     id="salary"
-                    placeholder="e.g., $100k - $150k"
+                    type="number"
+                    placeholder="₹ Enter salary"
                     value={formData.salary}
                     onChange={(e) =>
-                      setFormData({ ...formData, salary: e.target.value })
+                      setFormData({
+                        ...formData,
+                        salary: e.target.value,
+                      })
                     }
                   />
                 </div>
               </div>
+
               <div className="space-y-2">
                 <Label htmlFor="jobUrl">Job URL</Label>
                 <Input
@@ -234,10 +347,14 @@ export default function JobApplicationCard({
                   placeholder="https://..."
                   value={formData.jobUrl}
                   onChange={(e) =>
-                    setFormData({ ...formData, jobUrl: e.target.value })
+                    setFormData({
+                      ...formData,
+                      jobUrl: e.target.value,
+                    })
                   }
                 />
               </div>
+
               <div className="space-y-2">
                 <Label htmlFor="tags">Tags (comma-separated)</Label>
                 <Input
@@ -245,10 +362,14 @@ export default function JobApplicationCard({
                   placeholder="React, Tailwind, High Pay"
                   value={formData.tags}
                   onChange={(e) =>
-                    setFormData({ ...formData, tags: e.target.value })
+                    setFormData({
+                      ...formData,
+                      tags: e.target.value,
+                    })
                   }
                 />
               </div>
+
               <div className="space-y-2">
                 <Label htmlFor="description">Description</Label>
                 <Textarea
@@ -257,10 +378,14 @@ export default function JobApplicationCard({
                   placeholder="Brief description of the role..."
                   value={formData.description}
                   onChange={(e) =>
-                    setFormData({ ...formData, description: e.target.value })
+                    setFormData({
+                      ...formData,
+                      description: e.target.value,
+                    })
                   }
                 />
               </div>
+
               <div className="space-y-2">
                 <Label htmlFor="notes">Notes</Label>
                 <Textarea
@@ -268,7 +393,10 @@ export default function JobApplicationCard({
                   rows={4}
                   value={formData.notes}
                   onChange={(e) =>
-                    setFormData({ ...formData, notes: e.target.value })
+                    setFormData({
+                      ...formData,
+                      notes: e.target.value,
+                    })
                   }
                 />
               </div>
@@ -282,6 +410,7 @@ export default function JobApplicationCard({
               >
                 Cancel
               </Button>
+
               <Button type="submit">Save Changes</Button>
             </DialogFooter>
           </form>

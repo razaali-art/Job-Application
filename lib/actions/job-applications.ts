@@ -27,7 +27,7 @@ export async function createJobApplication(data: JobApplicationData) {
 
   await connectDB();
 
-  const {
+  let {
     company,
     position,
     location,
@@ -40,8 +40,65 @@ export async function createJobApplication(data: JobApplicationData) {
     description,
   } = data;
 
+  // Trim values
+  company = company?.trim();
+  position = position?.trim();
+  location = location?.trim() || "";
+  notes = notes?.trim() || "";
+  salary = salary?.trim() || "";
+  jobUrl = jobUrl?.trim() || "";
+  description = description?.trim() || "";
+
   if (!company || !position || !columnId || !boardId) {
     return { error: "Missing required fields" };
+  }
+
+  // Minimum length validation
+  if (company.length < 2) {
+    return { error: "Company name must be at least 2 characters" };
+  }
+
+  if (position.length < 2) {
+    return { error: "Position must be at least 2 characters" };
+  }
+
+  // Salary validation (numeric only)
+  if (salary && (!/^\d+$/.test(salary) || Number(salary) <= 0)) {
+    return { error: "Salary must be a valid number greater than 0" };
+  }
+
+  // URL validation
+  if (jobUrl) {
+    const urlPattern = /^(https?:\/\/)/i;
+
+    if (!urlPattern.test(jobUrl)) {
+      return {
+        error: "Job URL must start with http:// or https://",
+      };
+    }
+  }
+
+  // Description validation
+  if (description.length > 500) {
+    return { error: "Description cannot exceed 500 characters" };
+  }
+
+  // Notes validation
+  if (notes.length > 1000) {
+    return { error: "Notes cannot exceed 1000 characters" };
+  }
+
+  // Duplicate prevention
+  const existingJob = await JobApplication.findOne({
+    userId: session.user.id,
+    company,
+    position,
+  });
+
+  if (existingJob) {
+    return {
+      error: "This job application already exists",
+    };
   }
 
   // Verify board ownership
@@ -55,7 +112,6 @@ export async function createJobApplication(data: JobApplicationData) {
   }
 
   // Verify column belongs to board
-
   const column = await Column.findOne({
     _id: columnId,
     boardId: boardId,
@@ -116,6 +172,8 @@ export async function updateJobApplication(
     return { error: "Unauthorized" };
   }
 
+  await connectDB();
+
   const jobApplication = await JobApplication.findById(id);
 
   if (!jobApplication) {
@@ -124,6 +182,68 @@ export async function updateJobApplication(
 
   if (jobApplication.userId !== session.user.id) {
     return { error: "Unauthorized" };
+  }
+
+  // Trim update values
+  if (updates.company) updates.company = updates.company.trim();
+  if (updates.position) updates.position = updates.position.trim();
+  if (updates.location) updates.location = updates.location.trim();
+  if (updates.notes) updates.notes = updates.notes.trim();
+  if (updates.salary) updates.salary = updates.salary.trim();
+  if (updates.jobUrl) updates.jobUrl = updates.jobUrl.trim();
+  if (updates.description) updates.description = updates.description.trim();
+
+  // Company validation
+  if (updates.company && updates.company.length < 2) {
+    return { error: "Company name must be at least 2 characters" };
+  }
+
+  // Position validation
+  if (updates.position && updates.position.length < 2) {
+    return { error: "Position must be at least 2 characters" };
+  }
+
+  // Salary validation
+  if (
+    updates.salary &&
+    (!/^\d+$/.test(updates.salary) || Number(updates.salary) <= 0)
+  ) {
+    return { error: "Salary must be a valid number greater than 0" };
+  }
+
+  // URL validation
+  if (updates.jobUrl) {
+    const urlPattern = /^(https?:\/\/)/i;
+
+    if (!urlPattern.test(updates.jobUrl)) {
+      return {
+        error: "Job URL must start with http:// or https://",
+      };
+    }
+  }
+
+  // Description validation
+  if (updates.description && updates.description.length > 500) {
+    return { error: "Description cannot exceed 500 characters" };
+  }
+
+  // Notes validation
+  if (updates.notes && updates.notes.length > 1000) {
+    return { error: "Notes cannot exceed 1000 characters" };
+  }
+
+  // Duplicate prevention during update
+  const duplicateCheck = await JobApplication.findOne({
+    _id: { $ne: id },
+    userId: session.user.id,
+    company: updates.company || jobApplication.company,
+    position: updates.position || jobApplication.position,
+  });
+
+  if (duplicateCheck) {
+    return {
+      error: "This job application already exists",
+    };
   }
 
   const { columnId, order, ...otherUpdates } = updates;
@@ -165,6 +285,7 @@ export async function updateJobApplication(
       newOrderValue = order * 100;
 
       const jobsThatNeedToShift = jobsInTargetColumn.slice(order);
+
       for (const job of jobsThatNeedToShift) {
         await JobApplication.findByIdAndUpdate(job._id, {
           $set: { order: job.order + 100 },
@@ -198,6 +319,7 @@ export async function updateJobApplication(
     const currentPositionIndex = otherJobsInColumn.findIndex(
       (job) => job.order > currentJobOrder
     );
+
     const oldPositionindex =
       currentPositionIndex === -1
         ? otherJobsInColumn.length
@@ -206,7 +328,10 @@ export async function updateJobApplication(
     const newOrderValue = order * 100;
 
     if (order < oldPositionindex) {
-      const jobsToShiftDown = otherJobsInColumn.slice(order, oldPositionindex);
+      const jobsToShiftDown = otherJobsInColumn.slice(
+        order,
+        oldPositionindex
+      );
 
       for (const job of jobsToShiftDown) {
         await JobApplication.findByIdAndUpdate(job._id, {
@@ -214,9 +339,14 @@ export async function updateJobApplication(
         });
       }
     } else if (order > oldPositionindex) {
-      const jobsToShiftUp = otherJobsInColumn.slice(oldPositionindex, order);
+      const jobsToShiftUp = otherJobsInColumn.slice(
+        oldPositionindex,
+        order
+      );
+
       for (const job of jobsToShiftUp) {
         const newOrder = Math.max(0, job.order - 100);
+
         await JobApplication.findByIdAndUpdate(job._id, {
           $set: { order: newOrder },
         });
@@ -226,9 +356,13 @@ export async function updateJobApplication(
     updatesToApply.order = newOrderValue;
   }
 
-  const updated = await JobApplication.findByIdAndUpdate(id, updatesToApply, {
-    new: true,
-  });
+  const updated = await JobApplication.findByIdAndUpdate(
+    id,
+    updatesToApply,
+    {
+      new: true,
+    }
+  );
 
   revalidatePath("/dashboard");
 
@@ -257,6 +391,7 @@ export async function deleteJobApplication(id: string) {
   });
 
   await JobApplication.deleteOne({ _id: id });
+
   revalidatePath("/dashboard");
 
   return { success: true };
